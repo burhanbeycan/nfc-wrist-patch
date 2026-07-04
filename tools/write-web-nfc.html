@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Write NTAG213 URL</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#eef7ff;background:#08111f}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at 20% 0,rgba(95,242,209,.2),transparent 28rem),linear-gradient(135deg,#08111f,#020711)}main{width:min(760px,100%);border:1px solid rgba(159,205,255,.18);border-radius:28px;background:rgba(14,28,48,.78);box-shadow:0 24px 80px rgba(0,0,0,.4);padding:24px}h1{letter-spacing:-.05em;margin:.2rem 0 1rem}p{color:#9db4cf;line-height:1.6}textarea,button{font:inherit;width:100%;box-sizing:border-box}textarea{min-height:170px;margin:.5rem 0 1rem;padding:1rem;border-radius:18px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#eef7ff}button{border:0;border-radius:999px;padding:.95rem 1rem;background:linear-gradient(135deg,#5ff2d1,#8ab4ff);color:#04111a;font-weight:900}.status{padding:12px;border-radius:16px;background:rgba(255,255,255,.06)}</style>
+</head>
+<body>
+  <main>
+    <h1>Write NTAG213 URL record</h1>
+    <p>Open this page in Chrome on Android over HTTPS. Paste the generated dashboard URL, press Write, then hold the Galaxy S21 close to the NTAG213 inlay.</p>
+    <label>URL to write
+      <textarea id="url" placeholder="https://burhanbeycan.github.io/nfc-wrist-patch/?id=fab01"></textarea>
+    </label>
+    <button id="write" type="button">Write URL to NFC tag</button>
+    <p class="status" id="status" role="status">Waiting.</p>
+  </main>
+  <script>
+    const status = document.getElementById('status');
+    document.getElementById('write').addEventListener('click', async () => {
+      const url = document.getElementById('url').value.trim();
+      if (!url) { status.textContent = 'Paste a URL first.'; return; }
+      if (!('NDEFReader' in window)) { status.textContent = 'Web NFC is not available in this browser. Use Chrome for Android or a normal NFC writer app.'; return; }
+      try {
+        status.textContent = 'Hold the NTAG213 close to the phone.';
+        const ndef = new NDEFReader();
+        await ndef.write({ records: [{ recordType: 'url', data: url }] }, { overwrite: true });
+        status.textContent = 'Success. URL record written. Test by tapping the fabric patch.';
+      } catch (error) {
+        status.textContent = `Write failed: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html>
