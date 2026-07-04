@@ -1,0 +1,49 @@
+{
+  "schema": "fabric-ntag213-heart.v1",
+  "patchId": "fab02",
+  "patchName": "Fabric Patch B — motion test",
+  "subjectAlias": "Demo wearer",
+  "measuredAt": "2026-07-04T14:47:00+03:00",
+  "readMode": "static-json",
+  "nfc": {
+    "chip": "NTAG213",
+    "uid": "04-91-2C-7E-11-90-80",
+    "ndef": "https-url",
+    "tagMemoryBytes": 144
+  },
+  "vitals": {
+    "heartRateBpm": 104,
+    "spo2Percent": 97,
+    "skinTempC": 33.1,
+    "hrvRmssdMs": 32,
+    "confidence": 0.84
+  },
+  "signal": {
+    "qualityPercent": 78,
+    "motionArtifactPercent": 24,
+    "contact": "acceptable",
+    "batteryPercent": 74,
+    "sensorMode": "simulated motion PPG snapshot"
+  },
+  "hardware": {
+    "fabricLayer": "stretch textile with TPU carrier",
+    "biointerface": "soft optical window / adhesive perimeter",
+    "sensorStack": "PPG/ECG electronics required for real heartbeat"
+  },
+  "history": [
+    { "t": -60, "bpm": 96 },
+    { "t": -50, "bpm": 99 },
+    { "t": -40, "bpm": 101 },
+    { "t": -30, "bpm": 103 },
+    { "t": -20, "bpm": 106 },
+    { "t": -10, "bpm": 105 },
+    { "t": 0, "bpm": 104 }
+  ],
+  "alerts": [
+    {
+      "level": "warn",
+      "title": "Movement condition",
+      "detail": "This example demonstrates higher heart rate and moderate motion artifact."
+    }
+  ]
+}
