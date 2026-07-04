@@ -1,1 +1,9 @@
-// Root Gradle file for the native Android demo app.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        add("classpath", "com.android.tools.build:gradle:8.7.3")
+    }
+}
