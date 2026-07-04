@@ -2,24 +2,50 @@
 
 Professional tap-to-open system for a fabric-integrated NFC wrist patch.
 
-The repository contains two demonstration layers:
+The repository contains three demonstration layers:
 
-1. **Native Android app** for Samsung Galaxy S21 sideload demo.
-2. **Web dashboard** for browser-only GitHub Pages demo.
+1. **`android/` advanced native app** for true-sensor path: NTAG213 opens the app; BLE/dynamic-NFC/backend can provide real heartbeat values.
+2. **`android-app/` minimal native app** for urgent Samsung Galaxy S21 sideload demo: install APK, write compact URI to NTAG213, tap label, app opens.
+3. **Web dashboard** for browser-only GitHub Pages demo.
 
 ## Target phone-app workflow
 
 1. Integrate an **NTAG213 NFC inlay** on the top/outside layer of the fabric wrist patch.
-2. Build and install the native Android APK from `android-app/` on the Samsung Galaxy S21.
+2. Build and install one of the native Android APKs on the Samsung Galaxy S21.
 3. Open the app once.
-4. In the app, press **Write NTAG213** and touch the NTAG213 label.
+4. Use the app's write button to write the NTAG213 label.
 5. Move the phone away.
 6. Touch the label again.
 7. Android opens the app and the pro GUI displays heart rate, SpO₂, HRV, skin temperature, signal quality, battery, patch identity, alerts, and pulse trend.
 
 > Important: NTAG213 is passive NFC memory. It can open the app and store a small ID/snapshot, but it cannot measure heartbeat by itself. True live heartbeat needs PPG/ECG or piezo sensor electronics, analog front end, MCU, power, and BLE/backend/dynamic-NFC update path.
 
-## Native Android app
+## Recommended app choice
+
+### Best for true measured heartbeat path
+
+Open this folder in Android Studio:
+
+```text
+android/
+```
+
+Package:
+
+```text
+com.burhanbeycan.nfcwristpatch
+```
+
+Use this app when you want the NTAG213 to launch the app and then have a real MCU/BLE sensor source feed measured heartbeat values.
+
+Detailed guide:
+
+```text
+android/SAMSUNG_S21_INSTALL_AND_TAG.md
+firmware/PULSE_SENSOR_PROTOCOL.md
+```
+
+### Best for immediate simple demo
 
 Open this folder in Android Studio:
 
@@ -27,7 +53,7 @@ Open this folder in Android Studio:
 android-app/
 ```
 
-Package name:
+Package:
 
 ```text
 com.burhanbeycan.nfcpatch
@@ -52,24 +78,12 @@ q=94       signal quality, percent
 
 The custom `wpatch://` scheme is better than a full HTTPS URL for urgent sideload demonstration because it is short and routes to the installed app.
 
-Android app files:
+Detailed guide:
 
 ```text
-android-app/
-├── README.md
-├── settings.gradle
-├── build.gradle
-├── gradle.properties
-├── app/build.gradle
-├── app/src/main/AndroidManifest.xml
-├── app/src/main/java/com/burhanbeycan/nfcpatch/MainActivity.java
-├── app/src/main/res/values/*.xml
-├── app/src/main/res/xml/*.xml
-├── app/src/main/res/drawable/*.xml
-└── docs/
-    ├── GALAXY_S21_INSTALL.md
-    ├── NTAG213_PAYLOAD_FORMAT.md
-    └── REAL_SENSOR_NEXT_STEP.md
+android-app/docs/GALAXY_S21_INSTALL.md
+android-app/docs/NTAG213_PAYLOAD_FORMAT.md
+android-app/docs/REAL_SENSOR_NEXT_STEP.md
 ```
 
 ## Build and install APK
@@ -99,12 +113,6 @@ Phone settings:
 Settings > Connections > NFC and contactless payments > On
 ```
 
-Detailed install guide:
-
-```text
-android-app/docs/GALAXY_S21_INSTALL.md
-```
-
 ## True heartbeat architecture
 
 For physical pulse measurement from a fabric sensor layer:
@@ -126,7 +134,7 @@ MCU sends latest BPM through BLE or backend
 Android app displays true measured value
 ```
 
-The included Android app already handles the **tap-to-open app** and **stored snapshot** demonstration. The next engineering step is to connect a real sensor data source to replace the stored snapshot values.
+The native apps handle the **tap-to-open app** and **stored snapshot** demonstration. For truly live heartbeat, connect the sensor data source to the advanced `android/` app via BLE or replace the local snapshot with backend/dynamic NFC data.
 
 ## Web dashboard URL
 
