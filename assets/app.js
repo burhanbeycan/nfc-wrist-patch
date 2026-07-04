@@ -1,415 +1,564 @@
 (() => {
   "use strict";
 
-  const MIME_TYPE = "application/vnd.polymerpatch.health+json";
-  const DEFAULT_PATCH_ID = "WP-HYDROGEL-001";
-  const params = new URLSearchParams(window.location.search || "");
-  const hashParams = parseHashParams(window.location.hash);
+  const NTAG213_USER_BYTES = 144;
+  const NDEF_URL_OVERHEAD_ESTIMATE = 8;
+  const DEFAULT_READING_ID = "fab01";
   const $ = (id) => document.getElementById(id);
+
+  const demoReading = {
+    schema: "fabric-ntag213-heart.v1",
+    patchId: "fab01",
+    patchName: "Fabric Patch A",
+    subjectAlias: "Demo wearer",
+    measuredAt: new Date().toISOString(),
+    readMode: "static-json",
+    nfc: {
+      chip: "NTAG213",
+      uid: "04-A2-17-8C-93-21-80",
+      ndef: "https-url",
+      tagMemoryBytes: 144
+    },
+    vitals: {
+      heartRateBpm: 72,
+      spo2Percent: 98,
+      skinTempC: 32.6,
+      hrvRmssdMs: 48,
+      confidence: 0.96
+    },
+    signal: {
+      qualityPercent: 94,
+      motionArtifactPercent: 8,
+      contact: "good",
+      batteryPercent: 86,
+      sensorMode: "simulated PPG snapshot"
+    },
+    hardware: {
+      fabricLayer: "polyester/TPU laminate demo",
+      biointerface: "optional hydrogel electrode zone",
+      sensorStack: "PPG/ECG electronics required for real heartbeat"
+    },
+    history: [
+      { t: -60, bpm: 70 },
+      { t: -50, bpm: 71 },
+      { t: -40, bpm: 72 },
+      { t: -30, bpm: 73 },
+      { t: -20, bpm: 72 },
+      { t: -10, bpm: 74 },
+      { t: 0, bpm: 72 }
+    ],
+    alerts: [
+      { level: "info", title: "Passive NTAG213", detail: "The NFC tag opens the dashboard and carries an ID or stored snapshot. It does not measure heartbeat by itself." },
+      { level: "ok", title: "Phone tap flow", detail: "Write this page URL as an NDEF URI record; Android will route the tap to the browser." }
+    ]
+  };
 
   let currentReading = null;
   let generatedUrl = "";
 
-  const demoReading = {
-    schema: "wristpatch.health.v1",
-    patchId: DEFAULT_PATCH_ID,
-    subjectAlias: "Volunteer A",
-    measuredAt: new Date().toISOString(),
-    device: {
-      firmware: "0.3.0-research",
-      sensorStack: ["NFC Type 2 tag", "PPG optical module", "skin impedance pair", "hydrogel electrode interface"],
-      nfcUid: "04-A2-17-8C-93-21-80"
-    },
-    vitals: {
-      heartRateBpm: 72,
-      heartRateConfidence: 0.96,
-      spo2Percent: 98,
-      skinTempC: 32.4,
-      hrvRmssdMs: 48,
-      respirationRateBrpm: 15
-    },
-    patch: {
-      hydrationIndex: 0.71,
-      electrodeImpedanceKohm: 18.2,
-      adhesionScore: 0.88,
-      interfaceMaterial: "conductive hydrogel / Ag-AgCl reference island"
-    },
-    signal: {
-      quality: 94,
-      motionArtifact: 0.08,
-      batteryPercent: 82
-    },
-    history: [
-      { t: -60, heartRateBpm: 70 }, { t: -50, heartRateBpm: 71 }, { t: -40, heartRateBpm: 72 },
-      { t: -30, heartRateBpm: 73 }, { t: -20, heartRateBpm: 72 }, { t: -10, heartRateBpm: 74 },
-      { t: 0, heartRateBpm: 72 }
-    ],
-    alerts: [
-      { level: "ok", title: "Signal quality acceptable", detail: "PPG confidence and contact impedance are within the configured prototype range." },
-      { level: "info", title: "Research mode", detail: "Values are displayed as a research snapshot and must not be used for diagnosis." }
-    ],
-    signature: null
-  };
-
   document.addEventListener("DOMContentLoaded", init);
-  window.addEventListener("resize", () => currentReading && drawChart(currentReading));
+  window.addEventListener("resize", debounce(() => currentReading && drawWaveform(currentReading), 120));
 
   async function init() {
     registerServiceWorker();
-    hydrateBaseUrl();
     bindEvents();
-    const loaded = await loadFromUrl();
+    hydrateFormDefaults();
+    const loaded = await loadReadingFromUrl();
     if (!loaded) {
-      setNotice("No NFC payload found in the URL. Demo data is loaded so the interface can be tested before writing a real tag.");
-      updateDashboard(demoReading, "demo");
+      showNotice("No NFC URL parameters were found, so the professional demo heartbeat is shown. Generate an NTAG213 URL below and write it to the fabric tag.");
+      renderReading(demoReading, "demo reading");
     }
-    buildGeneratedUrlFromForm();
+    generateTagUrl(false);
   }
 
   function bindEvents() {
-    $("demoButton").addEventListener("click", () => updateDashboard({ ...demoReading, measuredAt: new Date().toISOString() }, "demo button"));
-    $("copyUrlButton").addEventListener("click", () => copyText(buildNfcUrl(currentReading || demoReading), "NFC URL copied."));
-    $("copyJsonButton").addEventListener("click", () => copyText(JSON.stringify(currentReading || demoReading, null, 2), "JSON payload copied."));
-    $("writeTagButton").addEventListener("click", () => writeUrlWithWebNfc(buildNfcUrl(currentReading || demoReading)));
-    $("builderForm").addEventListener("submit", (event) => {
+    $("loadDemo").addEventListener("click", () => renderReading({ ...demoReading, measuredAt: new Date().toISOString() }, "demo button"));
+    $("copyCurrentUrl").addEventListener("click", () => copyText(buildCompactUrl(currentReading || demoReading), "Current NFC URL copied."));
+    $("writeCurrentTag").addEventListener("click", () => writeNfcUrl(buildCompactUrl(currentReading || demoReading)));
+    $("copyJson").addEventListener("click", () => copyText(JSON.stringify(currentReading || demoReading, null, 2), "Reading JSON copied."));
+
+    $("tagForm").addEventListener("submit", (event) => {
       event.preventDefault();
-      buildGeneratedUrlFromForm(true);
+      generateTagUrl(true);
     });
-    ["baseUrl", "builderPatchId", "builderHeartRate", "builderSpo2", "builderSkinTemp", "builderHydration"].forEach((id) => {
-      $(id).addEventListener("input", () => buildGeneratedUrlFromForm(false));
+
+    ["baseUrl", "urlMode", "formPatchId", "formBpm", "formSpo2", "formTemp", "formHrv", "formQuality"].forEach((id) => {
+      $(id).addEventListener("input", () => generateTagUrl(false));
+      $(id).addEventListener("change", () => generateTagUrl(false));
     });
-    $("copyGeneratedButton").addEventListener("click", () => copyText(generatedUrl, "Generated NFC URL copied."));
-    $("writeGeneratedButton").addEventListener("click", () => writeUrlWithWebNfc(generatedUrl));
+
+    $("copyGenerated").addEventListener("click", () => copyText(generatedUrl, "Generated NTAG213 URL copied."));
+    $("writeGenerated").addEventListener("click", () => writeNfcUrl(generatedUrl));
   }
 
-  async function loadFromUrl() {
+  async function loadReadingFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const hashParams = parseHashParams(window.location.hash);
+    for (const [key, value] of hashParams.entries()) {
+      if (!params.has(key)) params.set(key, value);
+    }
+
     try {
-      const merged = new URLSearchParams(hashParams.toString());
-      for (const [key, value] of params.entries()) merged.set(key, value);
-
-      if (merged.has("d")) {
-        const reading = parseEncodedPayload(merged.get("d"));
-        updateDashboard(reading, "NFC URL payload");
+      if (params.has("d")) {
+        const decoded = JSON.parse(base64UrlDecode(params.get("d")));
+        renderReading(decoded, "encoded JSON URL");
         return true;
       }
 
-      if (merged.has("patch")) {
-        const patchId = sanitizePatchId(merged.get("patch"));
-        const response = await fetch(`data/patches/${patchId}.json`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`Patch file not found: ${patchId}`);
-        const reading = await response.json();
-        updateDashboard(reading, `patch registry: ${patchId}`);
+      if (hasCompactVitals(params)) {
+        const reading = readingFromCompactParams(params);
+        renderReading(reading, "NTAG213 compact URL snapshot");
         return true;
       }
 
-      if (merged.has("url")) {
-        const url = new URL(merged.get("url"), window.location.href);
-        if (url.origin !== window.location.origin) throw new Error("External payload URLs are blocked by default.");
-        const response = await fetch(url.href, { cache: "no-store" });
-        if (!response.ok) throw new Error(`Payload URL failed: ${response.status}`);
+      const id = params.get("id") || params.get("patch") || params.get("p");
+      if (id) {
+        const safeId = sanitizeId(id);
+        const response = await fetch(`data/readings/${safeId}.json`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`No reading file found for ${safeId}`);
         const reading = await response.json();
-        updateDashboard(reading, `payload URL: ${url.pathname}`);
+        renderReading(reading, `hosted reading: ${safeId}.json`);
         return true;
       }
     } catch (error) {
       console.error(error);
-      setNotice(`Payload could not be decoded: ${error.message}. Demo data is shown instead.`);
-      updateDashboard(demoReading, "decode fallback");
+      showNotice(`Could not load the NFC reading: ${error.message}. Demo data is shown instead.`);
+      renderReading(demoReading, "fallback demo");
       return true;
     }
+
     return false;
   }
 
-  function updateDashboard(rawReading, sourceLabel) {
-    const reading = normalizeReading(rawReading);
+  function hasCompactVitals(params) {
+    return params.has("b") || params.has("bpm") || params.has("hr");
+  }
+
+  function readingFromCompactParams(params) {
+    const patchId = sanitizeId(params.get("p") || params.get("id") || DEFAULT_READING_ID);
+    const bpm = numberParam(params, ["b", "bpm", "hr"], 72);
+    const spo2 = numberParam(params, ["o", "spo2"], 98);
+    const temp = numberParam(params, ["t", "temp"], 32.6);
+    const hrv = numberParam(params, ["v", "hrv"], 48);
+    const quality = numberParam(params, ["q", "quality"], 92);
+    const battery = numberParam(params, ["bat", "battery"], 80);
+    const confidence = clamp(quality / 100, 0, 1);
+
+    return normalizeReading({
+      ...demoReading,
+      patchId,
+      patchName: `Fabric Patch ${patchId.toUpperCase()}`,
+      measuredAt: new Date().toISOString(),
+      readMode: "compact-url-snapshot",
+      vitals: {
+        heartRateBpm: bpm,
+        spo2Percent: spo2,
+        skinTempC: temp,
+        hrvRmssdMs: hrv,
+        confidence
+      },
+      signal: {
+        ...demoReading.signal,
+        qualityPercent: quality,
+        batteryPercent: battery,
+        sensorMode: "stored compact URL snapshot"
+      },
+      history: synthesizeHistory(bpm),
+      alerts: [
+        { level: "info", title: "Compact NTAG213 snapshot", detail: "This heartbeat value is stored in the NFC URL. It changes only when the URL/tag is rewritten." },
+        ...demoReading.alerts
+      ]
+    });
+  }
+
+  function renderReading(input, source) {
+    const reading = normalizeReading(input);
     currentReading = reading;
 
     const vitals = reading.vitals;
-    const patch = reading.patch;
     const signal = reading.signal;
+    const heart = heartStatus(vitals.heartRateBpm);
+    const memoryUrl = buildCompactUrl(reading);
+    const memoryBytes = estimateNdefBytes(memoryUrl);
 
-    $("recordStatus").textContent = "Loaded";
-    $("recordSource").textContent = sourceLabel;
-    $("integrityStatus").textContent = reading.signature ? "Signature present" : "Unsigned prototype";
-    $("measuredAt").textContent = formatDate(reading.measuredAt);
-    $("patchId").textContent = reading.patchId;
-    $("subjectAlias").textContent = reading.subjectAlias || "—";
-    $("firmware").textContent = reading.device.firmware || "—";
-    $("nfcUid").textContent = reading.device.nfcUid || "—";
-    $("sensorStack").textContent = Array.isArray(reading.device.sensorStack) ? reading.device.sensorStack.join(", ") : "—";
+    text("heartRate", round(vitals.heartRateBpm, 0));
+    text("miniBpm", round(vitals.heartRateBpm, 0));
+    text("miniPatch", reading.patchName || reading.patchId);
+    text("spo2", format(vitals.spo2Percent, 1, "%"));
+    text("hrv", format(vitals.hrvRmssdMs, 0, " ms"));
+    text("skinTemp", format(vitals.skinTempC, 1, " °C"));
+    text("measuredAt", formatDate(reading.measuredAt));
+    text("readingSource", source);
+    text("patchId", reading.patchId);
+    text("nfcUid", reading.nfc.uid || "not stored");
+    text("readMode", reading.readMode);
+    text("battery", format(signal.batteryPercent, 0, "%"));
+    text("confidenceValue", format(vitals.confidence * 100, 0, "%"));
+    text("motionArtifact", format(signal.motionArtifactPercent, 0, "%"));
+    text("contactStatus", signal.contact || "unknown");
+    text("sensorMode", signal.sensorMode || "not specified");
+    text("payloadMode", reading.readMode.includes("compact") ? "compact URL" : reading.readMode.includes("json") ? "JSON" : "patch ID");
+    text("memoryFit", `${memoryBytes}/${NTAG213_USER_BYTES} B`);
 
-    setText("heartRate", vitals.heartRateBpm, "—");
-    setText("spo2", formatNumber(vitals.spo2Percent, 1, "%"));
-    setText("skinTemp", formatNumber(vitals.skinTempC, 1, " °C"));
-    setText("hrv", formatNumber(vitals.hrvRmssdMs, 0, " ms"));
-    setText("hydration", formatNumber(patch.hydrationIndex * 100, 0, "%"));
-    setText("impedance", formatNumber(patch.electrodeImpedanceKohm, 1, " kΩ"));
-    setText("adhesion", formatNumber(patch.adhesionScore * 100, 0, "%"));
-    setText("motionArtifact", formatNumber(signal.motionArtifact * 100, 0, "%"));
-    setText("battery", formatNumber(signal.batteryPercent, 0, "% battery"));
-    setText("signalQuality", formatNumber(signal.quality, 0, "% quality"));
-    setText("heartConfidence", formatNumber(vitals.heartRateConfidence * 100, 0, "% conf."));
+    const ring = Math.max(0, Math.min(100, (vitals.heartRateBpm / 180) * 100));
+    $("heartRing").style.setProperty("--ring", String(ring.toFixed(0)));
+    text("heartInterpretation", heart.message);
+    text("trendChip", trendLabel(reading.history));
 
-    const heartLevel = heartRateLevel(vitals.heartRateBpm);
-    $("heartRing").style.setProperty("--value", Math.max(0, Math.min(100, (vitals.heartRateBpm / 180) * 100)).toFixed(0));
-    $("heartStatus").textContent = heartLevel.message;
-    $("heartTrend").textContent = trendLabel(reading.history);
-    updatePillClass($("heartConfidence"), vitals.heartRateConfidence * 100, 80, 60);
-    updatePillClass($("signalQuality"), signal.quality, 80, 60);
-    updatePillClass($("battery"), signal.batteryPercent, 35, 15);
+    setPill("confidencePill", `${Math.round(vitals.confidence * 100)}% conf.`, vitals.confidence * 100, 80, 60);
+    setPill("qualityPill", `${Math.round(signal.qualityPercent)}% quality`, signal.qualityPercent, 80, 60);
+    setPill("tagPill", reading.nfc.chip || "NTAG213", memoryBytes <= NTAG213_USER_BYTES ? 100 : 20, 80, 60);
 
-    renderAlerts(reading, heartLevel);
-    $("rawPayload").textContent = JSON.stringify(reading, null, 2);
-    drawChart(reading);
-    buildGeneratedUrlFromForm(false);
+    renderAlerts(reading, heart, memoryBytes);
+    $("rawJson").textContent = JSON.stringify(reading, null, 2);
+    drawWaveform(reading);
+    generateTagUrl(false);
   }
 
-  function normalizeReading(raw) {
-    const reading = typeof raw === "object" && raw !== null ? raw : {};
+  function normalizeReading(input) {
+    const reading = input && typeof input === "object" ? input : {};
     const vitals = reading.vitals || {};
-    const patch = reading.patch || {};
     const signal = reading.signal || {};
-    const device = reading.device || {};
+    const nfc = reading.nfc || {};
+    const hardware = reading.hardware || {};
     return {
-      schema: String(reading.schema || "wristpatch.health.v1"),
-      patchId: String(reading.patchId || DEFAULT_PATCH_ID),
-      subjectAlias: String(reading.subjectAlias || "Anonymous"),
+      schema: String(reading.schema || "fabric-ntag213-heart.v1"),
+      patchId: sanitizeId(reading.patchId || DEFAULT_READING_ID),
+      patchName: String(reading.patchName || "Fabric Wrist Patch"),
+      subjectAlias: String(reading.subjectAlias || "anonymous"),
       measuredAt: reading.measuredAt || new Date().toISOString(),
-      device: {
-        firmware: String(device.firmware || "unknown"),
-        sensorStack: Array.isArray(device.sensorStack) ? device.sensorStack.map(String) : [],
-        nfcUid: String(device.nfcUid || "not provided")
+      readMode: String(reading.readMode || "static-json"),
+      nfc: {
+        chip: String(nfc.chip || "NTAG213"),
+        uid: String(nfc.uid || ""),
+        ndef: String(nfc.ndef || "https-url"),
+        tagMemoryBytes: clamp(Number(nfc.tagMemoryBytes), 0, 4096, NTAG213_USER_BYTES)
       },
       vitals: {
-        heartRateBpm: clampNumber(vitals.heartRateBpm, 0, 260, 0),
-        heartRateConfidence: clampNumber(vitals.heartRateConfidence, 0, 1, 0),
-        spo2Percent: clampNumber(vitals.spo2Percent, 0, 100, 0),
-        skinTempC: clampNumber(vitals.skinTempC, 0, 60, 0),
-        hrvRmssdMs: clampNumber(vitals.hrvRmssdMs, 0, 250, 0),
-        respirationRateBrpm: clampNumber(vitals.respirationRateBrpm, 0, 80, 0)
-      },
-      patch: {
-        hydrationIndex: clampNumber(patch.hydrationIndex, 0, 1, 0),
-        electrodeImpedanceKohm: clampNumber(patch.electrodeImpedanceKohm, 0, 500, 0),
-        adhesionScore: clampNumber(patch.adhesionScore, 0, 1, 0),
-        interfaceMaterial: String(patch.interfaceMaterial || "not specified")
+        heartRateBpm: clamp(Number(vitals.heartRateBpm), 0, 260, 0),
+        spo2Percent: clamp(Number(vitals.spo2Percent), 0, 100, 0),
+        skinTempC: clamp(Number(vitals.skinTempC), 0, 60, 0),
+        hrvRmssdMs: clamp(Number(vitals.hrvRmssdMs), 0, 250, 0),
+        confidence: clamp(Number(vitals.confidence), 0, 1, 0)
       },
       signal: {
-        quality: clampNumber(signal.quality, 0, 100, 0),
-        motionArtifact: clampNumber(signal.motionArtifact, 0, 1, 0),
-        batteryPercent: clampNumber(signal.batteryPercent, 0, 100, 0)
+        qualityPercent: clamp(Number(signal.qualityPercent), 0, 100, 0),
+        motionArtifactPercent: clamp(Number(signal.motionArtifactPercent), 0, 100, 0),
+        contact: String(signal.contact || "unknown"),
+        batteryPercent: clamp(Number(signal.batteryPercent), 0, 100, 0),
+        sensorMode: String(signal.sensorMode || "not specified")
       },
-      history: Array.isArray(reading.history) ? reading.history.map((point, index) => ({
-        t: Number.isFinite(Number(point.t)) ? Number(point.t) : index,
-        heartRateBpm: clampNumber(point.heartRateBpm, 0, 260, 0)
-      })) : [],
-      alerts: Array.isArray(reading.alerts) ? reading.alerts : [],
-      signature: reading.signature || null
+      hardware: {
+        fabricLayer: String(hardware.fabricLayer || "fabric laminate"),
+        biointerface: String(hardware.biointerface || "not specified"),
+        sensorStack: String(hardware.sensorStack || "not specified")
+      },
+      history: normalizeHistory(reading.history, Number(vitals.heartRateBpm) || 72),
+      alerts: Array.isArray(reading.alerts) ? reading.alerts : []
     };
   }
 
-  function heartRateLevel(bpm) {
-    if (!bpm) return { level: "warn", message: "No heart-rate value in this NFC payload." };
-    if (bpm < 45) return { level: "danger", message: "Very low pulse flag for research review. Confirm sensor contact and subject state." };
-    if (bpm > 120) return { level: "warn", message: "Elevated pulse flag. Motion, stress, fever, or exercise may be contributing." };
-    return { level: "ok", message: "Heart-rate snapshot is within the configured prototype display band." };
+  function normalizeHistory(history, bpm) {
+    if (Array.isArray(history) && history.length) {
+      return history.map((point, index) => ({
+        t: Number.isFinite(Number(point.t)) ? Number(point.t) : index,
+        bpm: clamp(Number(point.bpm ?? point.heartRateBpm), 0, 260, bpm)
+      }));
+    }
+    return synthesizeHistory(bpm);
   }
 
-  function renderAlerts(reading, heartLevel) {
+  function synthesizeHistory(bpm) {
+    const safe = Number.isFinite(Number(bpm)) ? Number(bpm) : 72;
+    return [-60, -50, -40, -30, -20, -10, 0].map((t, index) => ({
+      t,
+      bpm: Math.round(safe + Math.sin(index * 1.2) * 2 + (index % 2 ? 1 : -1))
+    }));
+  }
+
+  function heartStatus(bpm) {
+    if (!bpm) return { level: "warn", message: "No heart-rate value is present in this NFC reading." };
+    if (bpm < 45) return { level: "danger", message: "Very low pulse flag. Re-check contact and compare with a validated reference device." };
+    if (bpm > 120) return { level: "warn", message: "Elevated pulse flag. Motion, exercise, stress, fever, or sensing error may be involved." };
+    return { level: "ok", message: "Heart-rate snapshot is inside the normal prototype display band." };
+  }
+
+  function renderAlerts(reading, heart, memoryBytes) {
     const list = $("alerts");
+    const template = $("alertTemplate");
     list.replaceChildren();
     const alerts = [
-      { level: heartLevel.level, title: "Heart-rate display band", detail: heartLevel.message },
+      { level: heart.level, title: "Heart-rate review", detail: heart.message },
       ...reading.alerts
     ];
-    if (reading.signal.motionArtifact > 0.25) alerts.push({ level: "warn", title: "Motion artifact", detail: "Motion artifact is high; PPG-derived metrics may be unreliable." });
-    if (reading.patch.electrodeImpedanceKohm > 80) alerts.push({ level: "warn", title: "Contact impedance", detail: "High impedance can indicate drying hydrogel or poor skin contact." });
-    if (!reading.signature) alerts.push({ level: "info", title: "Unsigned NFC payload", detail: "For production, add a backend-signed reading or HMAC to reduce spoofing risk." });
+    if (memoryBytes > NTAG213_USER_BYTES) {
+      alerts.unshift({ level: "danger", title: "Too large for NTAG213", detail: "Use ?id=fab01 or compact snapshot mode; full JSON URLs usually exceed NTAG213 memory." });
+    }
+    if (reading.readMode.includes("static") || reading.readMode.includes("compact")) {
+      alerts.push({ level: "info", title: "Stored snapshot", detail: "Passive NTAG213 does not stream live heartbeat. The displayed value is stored or fetched after the phone opens the URL." });
+    }
+    if (reading.signal.motionArtifactPercent > 25) {
+      alerts.push({ level: "warn", title: "Motion artifact", detail: "High motion artifact can make PPG/ECG-derived metrics unreliable." });
+    }
+    if (reading.signal.qualityPercent < 60) {
+      alerts.push({ level: "warn", title: "Low signal quality", detail: "Check fabric tension, sensor placement, and skin contact pressure." });
+    }
 
-    const template = $("alertTemplate");
-    for (const alert of alerts) {
+    for (const alert of alerts.slice(0, 7)) {
       const node = template.content.firstElementChild.cloneNode(true);
-      node.classList.add(alert.level === "danger" ? "danger" : alert.level === "warn" ? "warn" : "ok");
+      node.classList.add(alert.level || "info");
       node.querySelector("strong").textContent = alert.title || "Notice";
-      node.querySelector("p").textContent = alert.detail || "No detail provided.";
+      node.querySelector("p").textContent = alert.detail || "No detail.";
       list.appendChild(node);
     }
   }
 
-  function drawChart(reading) {
-    const canvas = $("heartChart");
+  function drawWaveform(reading) {
+    const canvas = $("waveCanvas");
     if (!canvas || !canvas.getContext) return;
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.max(640, Math.floor(rect.width * dpr));
-    canvas.height = Math.floor(320 * dpr);
+    const cssWidth = Math.max(320, rect.width || 900);
+    const cssHeight = 320;
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+    canvas.style.height = `${cssHeight}px`;
+
     const ctx = canvas.getContext("2d");
-    ctx.scale(dpr, dpr);
-    const width = canvas.width / dpr;
-    const height = canvas.height / dpr;
-    const points = reading.history.length ? reading.history : [{ t: 0, heartRateBpm: reading.vitals.heartRateBpm }];
-    const values = points.map((point) => point.heartRateBpm).filter((value) => value > 0);
-    const min = Math.max(30, Math.min(...values, 60) - 12);
-    const max = Math.min(220, Math.max(...values, 100) + 12);
-    const pad = { left: 44, right: 22, top: 28, bottom: 44 };
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const width = cssWidth;
+    const height = cssHeight;
+    const pad = { left: 46, right: 24, top: 26, bottom: 44 };
+    const points = reading.history;
+    const values = points.map((p) => p.bpm).filter((v) => v > 0);
+    const min = Math.max(30, Math.min(...values) - 12);
+    const max = Math.min(220, Math.max(...values) + 12);
 
     ctx.clearRect(0, 0, width, height);
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, "rgba(95, 242, 209, 0.16)");
-    gradient.addColorStop(1, "rgba(138, 180, 255, 0.06)");
-    ctx.fillStyle = gradient;
+    const bg = ctx.createLinearGradient(0, 0, width, height);
+    bg.addColorStop(0, "rgba(95,242,209,.16)");
+    bg.addColorStop(1, "rgba(138,180,255,.055)");
     roundRect(ctx, 0, 0, width, height, 18);
+    ctx.fillStyle = bg;
     ctx.fill();
 
-    ctx.strokeStyle = "rgba(255,255,255,.08)";
+    ctx.strokeStyle = "rgba(255,255,255,.085)";
     ctx.lineWidth = 1;
     ctx.font = "12px system-ui";
-    ctx.fillStyle = "rgba(233,243,255,.64)";
+    ctx.fillStyle = "rgba(238,247,255,.65)";
     for (let i = 0; i <= 4; i += 1) {
       const y = pad.top + ((height - pad.top - pad.bottom) * i) / 4;
       ctx.beginPath();
       ctx.moveTo(pad.left, y);
       ctx.lineTo(width - pad.right, y);
       ctx.stroke();
-      const label = Math.round(max - ((max - min) * i) / 4);
-      ctx.fillText(`${label}`, 12, y + 4);
+      ctx.fillText(String(Math.round(max - ((max - min) * i) / 4)), 12, y + 4);
     }
 
     const xFor = (index) => pad.left + ((width - pad.left - pad.right) * index) / Math.max(1, points.length - 1);
     const yFor = (value) => pad.top + (1 - (value - min) / (max - min || 1)) * (height - pad.top - pad.bottom);
 
-    ctx.lineWidth = 4;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    const lineGradient = ctx.createLinearGradient(pad.left, 0, width - pad.right, 0);
-    lineGradient.addColorStop(0, "#5ff2d1");
-    lineGradient.addColorStop(1, "#8ab4ff");
-    ctx.strokeStyle = lineGradient;
+    const area = ctx.createLinearGradient(0, pad.top, 0, height - pad.bottom);
+    area.addColorStop(0, "rgba(95,242,209,.22)");
+    area.addColorStop(1, "rgba(95,242,209,0)");
     ctx.beginPath();
     points.forEach((point, index) => {
       const x = xFor(index);
-      const y = yFor(point.heartRateBpm);
-      index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      const y = yFor(point.bpm);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     });
+    ctx.lineTo(xFor(points.length - 1), height - pad.bottom);
+    ctx.lineTo(xFor(0), height - pad.bottom);
+    ctx.closePath();
+    ctx.fillStyle = area;
+    ctx.fill();
+
+    const line = ctx.createLinearGradient(pad.left, 0, width - pad.right, 0);
+    line.addColorStop(0, "#5ff2d1");
+    line.addColorStop(.56, "#8ab4ff");
+    line.addColorStop(1, "#f7b2ff");
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = xFor(index);
+      const y = yFor(point.bpm);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = line;
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(95,242,209,.95)";
+    ctx.fillStyle = "rgba(95,242,209,.98)";
     points.forEach((point, index) => {
       ctx.beginPath();
-      ctx.arc(xFor(index), yFor(point.heartRateBpm), 4.5, 0, Math.PI * 2);
+      ctx.arc(xFor(index), yFor(point.bpm), 4.5, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    ctx.fillStyle = "rgba(233,243,255,.58)";
-    ctx.fillText("bpm", 12, 20);
-    ctx.fillText("time", width - 52, height - 16);
+    drawPulseGlyph(ctx, width - 176, 28);
+    ctx.fillStyle = "rgba(238,247,255,.58)";
+    ctx.fillText("bpm", 14, 20);
+    ctx.fillText("last 60 s", width - 84, height - 17);
   }
 
-  function buildGeneratedUrlFromForm(showNotice = false) {
-    const reading = normalizeReading({
+  function drawPulseGlyph(ctx, x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = "rgba(95,242,209,.75)";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(0, 28);
+    ctx.lineTo(26, 28);
+    ctx.lineTo(36, 18);
+    ctx.lineTo(48, 48);
+    ctx.lineTo(66, 8);
+    ctx.lineTo(82, 28);
+    ctx.lineTo(132, 28);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function generateTagUrl(showNoticeFlag) {
+    const mode = $("urlMode").value;
+    const reading = readingFromForm();
+    const base = $("baseUrl").value || currentBaseUrl();
+
+    if (mode === "id") generatedUrl = buildIdUrl(reading.patchId, base);
+    else if (mode === "json") generatedUrl = buildJsonUrl(reading, base);
+    else generatedUrl = buildCompactUrl(reading, base);
+
+    $("generatedUrl").value = generatedUrl;
+    const bytes = estimateNdefBytes(generatedUrl);
+    const rawBytes = new TextEncoder().encode(generatedUrl).byteLength;
+    const box = $("capacityBox");
+    box.classList.remove("good", "warn", "bad");
+    if (bytes <= NTAG213_USER_BYTES) {
+      box.classList.add("good");
+      box.textContent = `${rawBytes} URL bytes, about ${bytes} bytes with NDEF overhead. Good fit for NTAG213 (${NTAG213_USER_BYTES} byte user memory).`;
+    } else if (rawBytes <= NTAG213_USER_BYTES) {
+      box.classList.add("warn");
+      box.textContent = `${rawBytes} URL bytes, about ${bytes} bytes with overhead. It may be too close for NTAG213; prefer ?id= mode.`;
+    } else {
+      box.classList.add("bad");
+      box.textContent = `${rawBytes} URL bytes, about ${bytes} bytes with overhead. Too large for NTAG213; use patch ID only or a larger/dynamic NFC tag.`;
+    }
+
+    if (showNoticeFlag) showNoticeMessageForMode(mode, bytes);
+  }
+
+  function readingFromForm() {
+    return normalizeReading({
       ...demoReading,
-      patchId: $("builderPatchId")?.value || DEFAULT_PATCH_ID,
+      patchId: sanitizeId($("formPatchId").value || DEFAULT_READING_ID),
+      patchName: `Fabric Patch ${sanitizeId($("formPatchId").value || DEFAULT_READING_ID).toUpperCase()}`,
       measuredAt: new Date().toISOString(),
+      readMode: $("urlMode").value === "compact" ? "compact-url-snapshot" : $("urlMode").value === "json" ? "encoded-json-url" : "patch-id-url",
       vitals: {
-        ...demoReading.vitals,
-        heartRateBpm: Number($("builderHeartRate")?.value || 72),
-        spo2Percent: Number($("builderSpo2")?.value || 98),
-        skinTempC: Number($("builderSkinTemp")?.value || 32.4)
+        heartRateBpm: clamp(Number($("formBpm").value), 0, 260, 72),
+        spo2Percent: clamp(Number($("formSpo2").value), 0, 100, 98),
+        skinTempC: clamp(Number($("formTemp").value), 0, 60, 32.6),
+        hrvRmssdMs: clamp(Number($("formHrv").value), 0, 250, 48),
+        confidence: clamp(Number($("formQuality").value) / 100, 0, 1, 0.94)
       },
-      patch: {
-        ...demoReading.patch,
-        hydrationIndex: Number($("builderHydration")?.value || 0.71)
-      }
+      signal: {
+        ...demoReading.signal,
+        qualityPercent: clamp(Number($("formQuality").value), 0, 100, 94)
+      },
+      history: synthesizeHistory(clamp(Number($("formBpm").value), 0, 260, 72))
     });
-    const baseUrl = $("baseUrl")?.value || currentBaseUrl();
-    generatedUrl = buildNfcUrl(reading, baseUrl);
-    if ($("generatedUrl")) $("generatedUrl").value = generatedUrl;
-    const bytes = new TextEncoder().encode(generatedUrl).byteLength;
-    const recommendation = bytes > 850 ? "Use a dynamic NFC tag or store only ?patch=ID; this URL is large for common NTAG213/215 tags." : "Fits many larger NTAG/NFC Forum Type 2 tags; verify exact tag capacity before locking it.";
-    if ($("urlSize")) $("urlSize").textContent = `${bytes} bytes. ${recommendation}`;
-    if (showNotice) setNotice("Generated NFC URL is ready. Copy it or write it to an NFC tag as a URL record.");
   }
 
-  function buildNfcUrl(reading, baseUrl = currentBaseUrl()) {
-    const url = new URL(baseUrl, window.location.href);
+  function buildIdUrl(id, base = currentBaseUrl()) {
+    const url = new URL(base, window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("id", sanitizeId(id || DEFAULT_READING_ID));
+    return url.toString();
+  }
+
+  function buildCompactUrl(reading, base = currentBaseUrl()) {
+    const normalized = normalizeReading(reading);
+    const url = new URL(base, window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("p", normalized.patchId);
+    url.searchParams.set("b", String(Math.round(normalized.vitals.heartRateBpm)));
+    url.searchParams.set("o", String(round(normalized.vitals.spo2Percent, 1)));
+    url.searchParams.set("t", String(round(normalized.vitals.skinTempC, 1)));
+    url.searchParams.set("v", String(Math.round(normalized.vitals.hrvRmssdMs)));
+    url.searchParams.set("q", String(Math.round(normalized.signal.qualityPercent)));
+    return url.toString();
+  }
+
+  function buildJsonUrl(reading, base = currentBaseUrl()) {
+    const url = new URL(base, window.location.href);
     url.search = "";
     url.hash = "";
     url.searchParams.set("d", base64UrlEncode(JSON.stringify(normalizeReading(reading))));
     return url.toString();
   }
 
-  async function writeUrlWithWebNfc(url) {
-    if (!url) return setNotice("No URL generated yet.");
+  async function writeNfcUrl(url) {
+    if (!url) return showNotice("No URL generated yet.");
     if (!("NDEFReader" in window)) {
-      await copyText(url, "Web NFC is not available in this browser; NFC URL copied. Use NFC Tools or Samsung-compatible tag writer app.");
+      await copyText(url, "Web NFC is unavailable in this browser. URL copied; write it using an Android NFC writer app as a URL/URI record.");
       return;
     }
     try {
-      setNotice("Hold the writable NFC tag near the phone. Chrome will ask for NFC permission if needed.");
+      showNotice("Hold the writable NTAG213 near the phone. Chrome will ask for NFC permission if needed.");
       const ndef = new NDEFReader();
       await ndef.write({ records: [{ recordType: "url", data: url }] }, { overwrite: true });
-      setNotice("NFC URL record written successfully. Test by locking the phone, enabling NFC, and tapping the tag.");
+      showNotice("NFC tag written successfully. Tap the fabric patch again to test the open-screen flow.");
     } catch (error) {
       console.error(error);
-      setNotice(`Web NFC write failed: ${error.message}. The URL remains available to copy manually.`);
+      showNotice(`Web NFC write failed: ${error.message}. The URL is still available to copy manually.`);
     }
   }
 
-  function parseEncodedPayload(encoded) {
-    const json = base64UrlDecode(encoded || "");
-    return JSON.parse(json);
-  }
-
-  function parseHashParams(hash) {
-    const clean = (hash || "").replace(/^#\/?/, "");
-    const queryIndex = clean.indexOf("?");
-    return new URLSearchParams(queryIndex >= 0 ? clean.slice(queryIndex + 1) : "");
-  }
-
-  function hydrateBaseUrl() {
-    const input = $("baseUrl");
-    if (input) input.value = currentBaseUrl();
+  function hydrateFormDefaults() {
+    $("baseUrl").value = currentBaseUrl();
   }
 
   function currentBaseUrl() {
     return `${window.location.origin}${window.location.pathname}`;
   }
 
-  function base64UrlEncode(value) {
-    const bytes = new TextEncoder().encode(value);
-    let binary = "";
-    bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
-    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  function parseHashParams(hash) {
+    const clean = String(hash || "").replace(/^#\/?/, "");
+    const index = clean.indexOf("?");
+    return new URLSearchParams(index >= 0 ? clean.slice(index + 1) : clean);
   }
 
-  function base64UrlDecode(value) {
-    const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
-    const binary = atob(base64);
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  }
-
-  async function copyText(text, message) {
-    if (!text) return setNotice("Nothing to copy yet.");
-    try {
-      await navigator.clipboard.writeText(text);
-      setNotice(message || "Copied.");
-    } catch {
-      setNotice("Clipboard permission was blocked. Select and copy manually from the generated field.");
+  function numberParam(params, keys, fallback) {
+    for (const key of keys) {
+      if (params.has(key)) return Number(params.get(key));
     }
+    return fallback;
   }
 
-  function setNotice(message) {
-    const notice = $("runtimeNotice");
-    if (notice) notice.textContent = message;
+  function sanitizeId(value) {
+    return String(value || DEFAULT_READING_ID).replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 32) || DEFAULT_READING_ID;
   }
 
-  function setText(id, value, fallback = "—") {
-    const node = $(id);
-    if (node) node.textContent = value || fallback;
+  function clamp(value, min, max, fallback) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, number));
   }
 
-  function formatNumber(value, decimals = 0, suffix = "") {
+  function round(value, decimals = 0) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 0;
+    const factor = 10 ** decimals;
+    return Math.round(number * factor) / factor;
+  }
+
+  function format(value, decimals, suffix) {
     const number = Number(value);
     if (!Number.isFinite(number) || number === 0) return "—";
     return `${number.toFixed(decimals)}${suffix}`;
@@ -423,28 +572,64 @@
 
   function trendLabel(history) {
     if (!Array.isArray(history) || history.length < 2) return "No trend data";
-    const first = history[0].heartRateBpm;
-    const last = history[history.length - 1].heartRateBpm;
+    const first = history[0].bpm;
+    const last = history[history.length - 1].bpm;
     const delta = last - first;
-    if (Math.abs(delta) < 2) return "Stable over snapshot";
-    return delta > 0 ? `Up ${delta.toFixed(0)} bpm` : `Down ${Math.abs(delta).toFixed(0)} bpm`;
+    if (Math.abs(delta) < 2) return "Stable last minute";
+    return delta > 0 ? `Up ${Math.abs(delta).toFixed(0)} bpm` : `Down ${Math.abs(delta).toFixed(0)} bpm`;
   }
 
-  function clampNumber(value, min, max, fallback) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return fallback;
-    return Math.max(min, Math.min(max, number));
-  }
-
-  function sanitizePatchId(value) {
-    return String(value || DEFAULT_PATCH_ID).replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || DEFAULT_PATCH_ID;
-  }
-
-  function updatePillClass(node, value, warnThreshold, dangerThreshold) {
-    if (!node) return;
+  function setPill(id, label, value, warnThreshold, dangerThreshold) {
+    const node = $(id);
     node.classList.remove("warn", "danger");
+    node.textContent = label;
     if (value <= dangerThreshold) node.classList.add("danger");
     else if (value <= warnThreshold) node.classList.add("warn");
+  }
+
+  function text(id, value) {
+    const node = $(id);
+    if (node) node.textContent = value === undefined || value === null || value === "" ? "—" : String(value);
+  }
+
+  function estimateNdefBytes(url) {
+    return new TextEncoder().encode(String(url || "")).byteLength + NDEF_URL_OVERHEAD_ESTIMATE;
+  }
+
+  function showNoticeMessageForMode(mode, bytes) {
+    if (mode === "id") showNotice("Patch-ID URL generated. This is the best NTAG213 mode because it is short and robust.");
+    else if (mode === "compact") showNotice(bytes <= NTAG213_USER_BYTES ? "Compact snapshot URL generated. It stores BPM and a few vitals directly on the tag." : "Compact URL is still too large. Shorten the base URL or use ?id= mode.");
+    else showNotice("Encoded JSON generated. This usually does not fit NTAG213; use NTAG216/dynamic NFC or patch-ID mode.");
+  }
+
+  async function copyText(value, message) {
+    if (!value) return showNotice("Nothing to copy.");
+    try {
+      await navigator.clipboard.writeText(String(value));
+      showNotice(message || "Copied.");
+    } catch (error) {
+      console.error(error);
+      showNotice("Clipboard permission was blocked. Select the URL field and copy manually.");
+    }
+  }
+
+  function showNotice(message) {
+    const notice = $("systemNotice");
+    if (notice) notice.textContent = message;
+  }
+
+  function base64UrlEncode(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function base64UrlDecode(value) {
+    const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(String(value || "").length / 4) * 4, "=");
+    const binary = atob(normalized);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
   }
 
   function roundRect(ctx, x, y, width, height, radius) {
@@ -453,8 +638,16 @@
     ctx.arcTo(x + width, y, x + width, y + height, radius);
     ctx.arcTo(x + width, y + height, x, y + height, radius);
     ctx.arcTo(x, y + height, x, y, radius);
-    ctx.arcTo(x, y, x + width, y, radius);
+    ctx.arcTo(x, y, x + radius, y, radius);
     ctx.closePath();
+  }
+
+  function debounce(fn, wait) {
+    let timer;
+    return (...args) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => fn(...args), wait);
+    };
   }
 
   function registerServiceWorker() {
