@@ -1,0 +1,54 @@
+{
+  "schema": "fabric-ntag213-heart.v1",
+  "patchId": "fab01",
+  "patchName": "Fabric Patch A",
+  "subjectAlias": "Demo wearer",
+  "measuredAt": "2026-07-04T14:40:00+03:00",
+  "readMode": "static-json",
+  "nfc": {
+    "chip": "NTAG213",
+    "uid": "04-A2-17-8C-93-21-80",
+    "ndef": "https-url",
+    "tagMemoryBytes": 144
+  },
+  "vitals": {
+    "heartRateBpm": 72,
+    "spo2Percent": 98,
+    "skinTempC": 32.6,
+    "hrvRmssdMs": 48,
+    "confidence": 0.96
+  },
+  "signal": {
+    "qualityPercent": 94,
+    "motionArtifactPercent": 8,
+    "contact": "good",
+    "batteryPercent": 86,
+    "sensorMode": "simulated PPG snapshot"
+  },
+  "hardware": {
+    "fabricLayer": "polyester/TPU laminate demo",
+    "biointerface": "optional hydrogel electrode zone",
+    "sensorStack": "PPG/ECG electronics required for real heartbeat"
+  },
+  "history": [
+    { "t": -60, "bpm": 70 },
+    { "t": -50, "bpm": 71 },
+    { "t": -40, "bpm": 72 },
+    { "t": -30, "bpm": 73 },
+    { "t": -20, "bpm": 72 },
+    { "t": -10, "bpm": 74 },
+    { "t": 0, "bpm": 72 }
+  ],
+  "alerts": [
+    {
+      "level": "info",
+      "title": "Passive NTAG213",
+      "detail": "The NFC tag opens the dashboard and carries an ID or stored snapshot. It does not measure heartbeat by itself."
+    },
+    {
+      "level": "ok",
+      "title": "Phone tap flow",
+      "detail": "Write this page URL as an NDEF URI record; Android will route the tap to the browser."
+    }
+  ]
+}
