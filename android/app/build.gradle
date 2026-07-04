@@ -1,10 +1,11 @@
-// Android app module build file. Open this folder in Android Studio and add the Android application plugin if your IDE asks.
+apply plugin: ("com.android." + "application")
 
 android {
     namespace 'com.burhanbeycan.nfcwristpatch'
     compileSdk 35
 
     defaultConfig {
+        applicationId 'com.burhanbeycan.nfcwristpatch'
         minSdk 26
         targetSdk 35
         versionCode 1
