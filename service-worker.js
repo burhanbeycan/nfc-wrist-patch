@@ -1,4 +1,4 @@
-const CACHE_NAME = "nfc-wrist-patch-v1";
+const CACHE_NAME = "ntag213-fabric-heart-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,8 +6,8 @@ const APP_SHELL = [
   "./assets/app.js",
   "./assets/icon.svg",
   "./manifest.webmanifest",
-  "./data/demo-reading.json",
-  "./data/patches/WP-HYDROGEL-001.json"
+  "./data/readings/fab01.json",
+  "./data/readings/fab02.json"
 ];
 
 self.addEventListener("install", (event) => {
@@ -17,7 +17,7 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) => Promise.all(names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))))
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
   );
   self.clients.claim();
 });
