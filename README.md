@@ -2,111 +2,131 @@
 
 Professional tap-to-open system for a fabric-integrated NFC wrist patch.
 
-The repository now contains two demonstration layers:
+The repository contains two demonstration layers:
 
-1. **Web dashboard**: NTAG213 opens a GitHub Pages heartbeat screen.
-2. **Native Android app**: Samsung Galaxy S21 opens a sideloaded app directly from the NTAG213 label and shows the heartbeat GUI.
+1. **Native Android app** for Samsung Galaxy S21 sideload demo.
+2. **Web dashboard** for browser-only GitHub Pages demo.
 
-## Target workflow
+## Target phone-app workflow
 
-1. Integrate an **NTAG213 NFC inlay** on the top layer of a fabric wrist patch.
-2. Install the native Android APK on the Samsung Galaxy S21.
-3. Write the NTAG213 with a short NDEF URI plus Android Application Record.
-4. Bring the phone close to the NTAG213 label.
-5. Android opens the app and displays heart rate, SpO₂, HRV, skin temperature, signal quality, battery, patch identity, alerts, and waveform.
+1. Integrate an **NTAG213 NFC inlay** on the top/outside layer of the fabric wrist patch.
+2. Build and install the native Android APK from `android-app/` on the Samsung Galaxy S21.
+3. Open the app once.
+4. In the app, press **Write NTAG213** and touch the NTAG213 label.
+5. Move the phone away.
+6. Touch the label again.
+7. Android opens the app and the pro GUI displays heart rate, SpO₂, HRV, skin temperature, signal quality, battery, patch identity, alerts, and pulse trend.
 
-> Important: the piezoelectric material and silver-flake electrode can be the pulse-sensing layer, but **NTAG213 cannot digitize the piezo signal by itself**. True heartbeat needs a front-end amplifier, ADC, MCU, and BLE or dynamic-NFC bridge. NTAG213 is the tap-to-open trigger and small ID/summary memory.
+> Important: NTAG213 is passive NFC memory. It can open the app and store a small ID/snapshot, but it cannot measure heartbeat by itself. True live heartbeat needs PPG/ECG or piezo sensor electronics, analog front end, MCU, power, and BLE/backend/dynamic-NFC update path.
 
 ## Native Android app
 
-Open:
+Open this folder in Android Studio:
 
 ```text
-android/
+android-app/
 ```
 
 Package name:
 
 ```text
-com.burhanbeycan.nfcwristpatch
+com.burhanbeycan.nfcpatch
 ```
 
-Main app launch tag URI:
+Recommended NTAG213 app-launch URI:
 
 ```text
-wristpatch://read?p=fab01&b=72&o=98.0&t=32.6&v=48&q=94&src=ntag213
+wpatch://read?p=fab01&b=72&o=98&t=326&v=48&q=94
 ```
 
-BLE live-sensor launch URI:
+This compact payload means:
 
 ```text
-wristpatch://read?p=fab01&ble=PiezoPatch
+p=fab01    patch ID
+b=72       heart rate, bpm
+o=98       SpO₂, percent
+t=326      skin temperature ×10, so 326 = 32.6 °C
+v=48       HRV RMSSD, ms
+q=94       signal quality, percent
 ```
 
-After installing the app, open it manually once and press:
+The custom `wpatch://` scheme is better than a full HTTPS URL for urgent sideload demonstration because it is short and routes to the installed app.
+
+Android app files:
 
 ```text
-Write NTAG213 launch tag
+android-app/
+├── README.md
+├── settings.gradle
+├── build.gradle
+├── gradle.properties
+├── app/build.gradle
+├── app/src/main/AndroidManifest.xml
+├── app/src/main/java/com/burhanbeycan/nfcpatch/MainActivity.java
+├── app/src/main/res/values/*.xml
+├── app/src/main/res/xml/*.xml
+├── app/src/main/res/drawable/*.xml
+└── docs/
+    ├── GALAXY_S21_INSTALL.md
+    ├── NTAG213_PAYLOAD_FORMAT.md
+    └── REAL_SENSOR_NEXT_STEP.md
 ```
 
-The app writes the NTAG213 with a compact URI and an Android Application Record so tapping the label opens the native app.
+## Build and install APK
 
-Detailed setup:
+In Android Studio:
 
 ```text
-android/SAMSUNG_S21_INSTALL_AND_TAG.md
+File > Open > android-app/
+Build > Build Bundle(s) / APK(s) > Build APK(s)
 ```
 
-Firmware/BLE payload contract:
+Debug APK output:
 
 ```text
-firmware/PULSE_SENSOR_PROTOCOL.md
+android-app/app/build/outputs/apk/debug/app-debug.apk
+```
+
+ADB install:
+
+```bash
+adb install -r android-app/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Phone settings:
+
+```text
+Settings > Connections > NFC and contactless payments > On
+```
+
+Detailed install guide:
+
+```text
+android-app/docs/GALAXY_S21_INSTALL.md
 ```
 
 ## True heartbeat architecture
 
-For physical pulse measurement from piezo material + silver-flake electrode:
+For physical pulse measurement from a fabric sensor layer:
 
 ```text
-piezo/silver-flake material
-→ charge amplifier or high-impedance instrumentation front end
-→ band-pass filter and ADC
-→ MCU peak detection or sample streaming
-→ BLE JSON notification or dynamic NFC memory
+PPG / ECG / piezo sensor interface
+→ analog front end, filter, ADC
+→ low-power MCU
+→ BLE, backend, or dynamic NFC memory
 → Android app heartbeat GUI
 ```
 
-Recommended urgent demo architecture:
+Recommended urgent real-sensor path:
 
 ```text
-NTAG213 opens app
-BLE MCU named PiezoPatch sends real BPM/samples
-Android app displays true measured pulse
+NTAG213 opens app by patch ID
+sensor electronics measure pulse
+MCU sends latest BPM through BLE or backend
+Android app displays true measured value
 ```
 
-The Android app listens for BLE service:
-
-```text
-6f8a0001-79a6-4a5c-8f53-0c0a7a201001
-```
-
-notify characteristic:
-
-```text
-6f8a0002-79a6-4a5c-8f53-0c0a7a201001
-```
-
-Example JSON notification:
-
-```json
-{"patchId":"fab01","bpm":76,"quality":93,"battery":84,"contact":"good"}
-```
-
-Or sample burst:
-
-```json
-{"patchId":"fab01","fs":50,"samples":[0,4,9,20,44,80,42,12,3,0,0,5,12,26,60,95,50,15,4,0]}
-```
+The included Android app already handles the **tap-to-open app** and **stored snapshot** demonstration. The next engineering step is to connect a real sensor data source to replace the stored snapshot values.
 
 ## Web dashboard URL
 
@@ -126,28 +146,6 @@ Compact web snapshot URL:
 
 ```text
 https://burhanbeycan.github.io/nfc-wrist-patch/?p=fab01&b=72&o=98&t=32.6&v=48&q=94
-```
-
-## Project files
-
-```text
-.
-├── android/                            # Native Samsung Galaxy S21 app
-│   ├── README.md
-│   ├── SAMSUNG_S21_INSTALL_AND_TAG.md
-│   ├── settings.gradle
-│   ├── build.gradle
-│   └── app/
-├── firmware/PULSE_SENSOR_PROTOCOL.md   # BLE/dynamic-NFC protocol for real piezo pulse
-├── index.html                          # Web dashboard
-├── assets/app.js
-├── assets/styles.css
-├── data/readings/fab01.json
-├── data/readings/fab02.json
-├── docs/NTAG213_FABRIC_PATCH.md
-├── docs/REAL_HEARTBEAT_ARCHITECTURE.md
-├── schema/fabric-reading.schema.json
-└── tools/build-ntag213-url.mjs
 ```
 
 ## NTAG213 web URL generation
@@ -180,7 +178,7 @@ node tools/build-ntag213-url.mjs \
 - Add TPU/silicone/PU encapsulation and strain relief so wrist bending does not crack the inlay.
 - Do not sew through the antenna trace.
 - Test read distance after lamination, sweat exposure, washing simulation, and wrist flexion.
-- For true pulse, connect the piezo/silver-flake layer to active electronics and feed the app through BLE/dynamic NFC.
+- For true pulse, connect the sensor layer to active electronics and feed the app through BLE, backend, or dynamic NFC.
 
 ## Safety and privacy
 
