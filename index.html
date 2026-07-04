@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="description" content="NFC-readable wrist patch health dashboard for GitHub Pages and Samsung Galaxy S21." />
+  <title>NFC Wrist Patch Dashboard</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#dashboard">Skip to dashboard</a>
+
+  <main class="app-shell">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero__content">
+        <div class="brand-row" aria-label="Project identity">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div>
+            <p class="eyebrow">NFC Biointerface Prototype</p>
+            <h1 id="page-title">Wrist Patch Health Readout</h1>
+          </div>
+        </div>
+        <p class="hero__copy">
+          Tap a Samsung Galaxy S21 to the NFC patch. The NDEF URL opens this GitHub Pages dashboard and decodes the embedded snapshot.
+        </p>
+        <div class="hero__actions" aria-label="Dashboard actions">
+          <button class="button button--primary" id="demoButton" type="button">Load demo reading</button>
+          <button class="button" id="copyUrlButton" type="button">Copy NFC URL</button>
+          <button class="button" id="writeTagButton" type="button">Write tag with Web NFC</button>
+        </div>
+        <p class="notice" id="runtimeNotice" role="status" aria-live="polite"></p>
+      </div>
+      <aside class="hero__panel" aria-label="Current NFC status">
+        <div class="nfc-orbit" aria-hidden="true">
+          <div class="orbit orbit--outer"></div>
+          <div class="orbit orbit--middle"></div>
+          <div class="orbit orbit--inner"></div>
+          <div class="orbit__core">NFC</div>
+        </div>
+        <dl class="status-list">
+          <div><dt>Record</dt><dd id="recordStatus">Waiting</dd></div>
+          <div><dt>Source</dt><dd id="recordSource">No tag yet</dd></div>
+          <div><dt>Integrity</dt><dd id="integrityStatus">Unsigned</dd></div>
+        </dl>
+      </aside>
+    </section>
+
+    <section class="dashboard" id="dashboard" aria-labelledby="dashboard-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Live dashboard</p>
+          <h2 id="dashboard-title">Patch snapshot</h2>
+        </div>
+        <div class="timestamp-card">
+          <span>Measured</span>
+          <strong id="measuredAt">—</strong>
+        </div>
+      </div>
+
+      <div class="grid grid--hero-metrics">
+        <article class="card card--pulse" aria-labelledby="heart-rate-title">
+          <div class="card__header">
+            <div>
+              <p class="eyebrow">Primary vital</p>
+              <h3 id="heart-rate-title">Heart rate</h3>
+            </div>
+            <span class="quality-pill" id="heartConfidence">—</span>
+          </div>
+          <div class="pulse-layout">
+            <div class="metric-ring" id="heartRing" style="--value: 0;" role="img" aria-label="Heart rate gauge">
+              <div class="metric-ring__inner">
+                <strong id="heartRate">—</strong>
+                <span>bpm</span>
+              </div>
+            </div>
+            <div class="pulse-meta">
+              <p id="heartStatus">Awaiting NFC reading.</p>
+              <div class="trend" id="heartTrend">—</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card mini-metric">
+          <span class="metric-icon" aria-hidden="true">O₂</span>
+          <p>SpO₂</p>
+          <strong id="spo2">—</strong>
+          <small>Peripheral oxygen estimate</small>
+        </article>
+
+        <article class="card mini-metric">
+          <span class="metric-icon" aria-hidden="true">℃</span>
+          <p>Skin temp.</p>
+          <strong id="skinTemp">—</strong>
+          <small>Patch-skin interface</small>
+        </article>
+
+        <article class="card mini-metric">
+          <span class="metric-icon" aria-hidden="true">HRV</span>
+          <p>HRV</p>
+          <strong id="hrv">—</strong>
+          <small>RMSSD snapshot</small>
+        </article>
+      </div>
+
+      <div class="grid grid--secondary">
+        <article class="card chart-card">
+          <div class="card__header">
+            <div>
+              <p class="eyebrow">Last sixty seconds</p>
+              <h3>Heartbeat trend</h3>
+            </div>
+            <span class="quality-pill" id="signalQuality">—</span>
+          </div>
+          <canvas id="heartChart" width="900" height="320" aria-label="Heart-rate trend chart"></canvas>
+        </article>
+
+        <article class="card materials-card">
+          <div class="card__header">
+            <div>
+              <p class="eyebrow">Patch interface</p>
+              <h3>Polymer-skin contact</h3>
+            </div>
+          </div>
+          <dl class="interface-metrics">
+            <div><dt>Hydration index</dt><dd id="hydration">—</dd></div>
+            <div><dt>Electrode impedance</dt><dd id="impedance">—</dd></div>
+            <div><dt>Adhesion score</dt><dd id="adhesion">—</dd></div>
+            <div><dt>Motion artifact</dt><dd id="motionArtifact">—</dd></div>
+          </dl>
+          <div class="stack-visual" aria-hidden="true">
+            <span>encapsulation</span><span>NFC antenna</span><span>sensor island</span><span>hydrogel electrode</span><span>skin</span>
+          </div>
+        </article>
+      </div>
+
+      <div class="grid grid--details">
+        <article class="card">
+          <div class="card__header">
+            <div>
+              <p class="eyebrow">Patch identity</p>
+              <h3 id="patchId">—</h3>
+            </div>
+            <span class="quality-pill" id="battery">—</span>
+          </div>
+          <dl class="detail-list">
+            <div><dt>Subject alias</dt><dd id="subjectAlias">—</dd></div>
+            <div><dt>Firmware</dt><dd id="firmware">—</dd></div>
+            <div><dt>NFC UID</dt><dd id="nfcUid">—</dd></div>
+            <div><dt>Sensor stack</dt><dd id="sensorStack">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="card">
+          <div class="card__header">
+            <div>
+              <p class="eyebrow">Alerts</p>
+              <h3>Research flags</h3>
+            </div>
+          </div>
+          <ul class="alert-list" id="alerts"></ul>
+          <p class="card-note">This project is a research interface, not a diagnostic medical device.</p>
+        </article>
+
+        <article class="card raw-card">
+          <div class="card__header">
+            <div>
+              <p class="eyebrow">Payload</p>
+              <h3>NDEF JSON</h3>
+            </div>
+            <button class="button button--small" id="copyJsonButton" type="button">Copy JSON</button>
+          </div>
+          <pre id="rawPayload" tabindex="0">No NFC payload loaded.</pre>
+        </article>
+      </div>
+    </section>
+
+    <section class="builder card" aria-labelledby="builder-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">NFC tag builder</p>
+          <h2 id="builder-title">Create a tag URL</h2>
+        </div>
+      </div>
+      <div class="builder-grid">
+        <form id="builderForm" class="builder-form">
+          <label>Base dashboard URL
+            <input name="baseUrl" id="baseUrl" inputmode="url" autocomplete="url" />
+          </label>
+          <label>Patch ID
+            <input name="patchId" id="builderPatchId" value="WP-HYDROGEL-001" />
+          </label>
+          <label>Heart rate bpm
+            <input name="heartRate" id="builderHeartRate" type="number" min="25" max="240" value="72" />
+          </label>
+          <label>SpO₂ %
+            <input name="spo2" id="builderSpo2" type="number" min="50" max="100" step="0.1" value="98" />
+          </label>
+          <label>Skin temperature °C
+            <input name="skinTemp" id="builderSkinTemp" type="number" min="20" max="45" step="0.1" value="32.4" />
+          </label>
+          <label>Hydration index
+            <input name="hydration" id="builderHydration" type="number" min="0" max="1" step="0.01" value="0.71" />
+          </label>
+          <button class="button button--primary" type="submit">Generate NFC URL</button>
+        </form>
+        <div class="builder-output">
+          <label for="generatedUrl">Generated URL</label>
+          <textarea id="generatedUrl" rows="6" readonly></textarea>
+          <p id="urlSize" class="notice"></p>
+          <div class="hero__actions">
+            <button class="button" id="copyGeneratedButton" type="button">Copy generated URL</button>
+            <button class="button" id="writeGeneratedButton" type="button">Write generated URL</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="alertTemplate">
+    <li><span></span><strong></strong><p></p></li>
+  </template>
+
+  <script src="assets/app.js" defer></script>
+</body>
+</html>

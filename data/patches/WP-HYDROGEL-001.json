@@ -1,0 +1,57 @@
+{
+  "schema": "wristpatch.health.v1",
+  "patchId": "WP-HYDROGEL-001",
+  "subjectAlias": "Volunteer A",
+  "measuredAt": "2026-07-04T11:42:00+03:00",
+  "device": {
+    "firmware": "0.3.0-research",
+    "sensorStack": [
+      "NFC Type 2 tag",
+      "PPG optical module",
+      "skin impedance pair",
+      "hydrogel electrode interface"
+    ],
+    "nfcUid": "04-A2-17-8C-93-21-80"
+  },
+  "vitals": {
+    "heartRateBpm": 72,
+    "heartRateConfidence": 0.96,
+    "spo2Percent": 98,
+    "skinTempC": 32.4,
+    "hrvRmssdMs": 48,
+    "respirationRateBrpm": 15
+  },
+  "patch": {
+    "hydrationIndex": 0.71,
+    "electrodeImpedanceKohm": 18.2,
+    "adhesionScore": 0.88,
+    "interfaceMaterial": "conductive hydrogel / Ag-AgCl reference island"
+  },
+  "signal": {
+    "quality": 94,
+    "motionArtifact": 0.08,
+    "batteryPercent": 82
+  },
+  "history": [
+    { "t": -60, "heartRateBpm": 70 },
+    { "t": -50, "heartRateBpm": 71 },
+    { "t": -40, "heartRateBpm": 72 },
+    { "t": -30, "heartRateBpm": 73 },
+    { "t": -20, "heartRateBpm": 72 },
+    { "t": -10, "heartRateBpm": 74 },
+    { "t": 0, "heartRateBpm": 72 }
+  ],
+  "alerts": [
+    {
+      "level": "ok",
+      "title": "Signal quality acceptable",
+      "detail": "PPG confidence and contact impedance are within the configured prototype range."
+    },
+    {
+      "level": "info",
+      "title": "Research mode",
+      "detail": "Values are displayed as a research snapshot and must not be used for diagnosis."
+    }
+  ],
+  "signature": null
+}

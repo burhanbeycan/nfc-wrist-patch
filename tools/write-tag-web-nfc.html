@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Write NFC Wrist Patch Tag</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#07111f;color:#e9f3ff;margin:0;display:grid;min-height:100vh;place-items:center;padding:24px}main{width:min(720px,100%);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:24px}textarea,input,button{font:inherit;width:100%;box-sizing:border-box}textarea,input{margin:.5rem 0 1rem;padding:.85rem;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#e9f3ff}button{padding:.9rem 1rem;border:0;border-radius:999px;background:linear-gradient(135deg,#5ff2d1,#8ab4ff);font-weight:800;color:#04111a}p{color:#9bb4cf;line-height:1.55}</style>
+</head>
+<body>
+  <main>
+    <h1>Write NFC URL record</h1>
+    <p>Open this page in Chrome on Android, paste the generated dashboard URL, press Write, then tap a writable NFC tag.</p>
+    <label>Dashboard NFC URL<textarea id="url" rows="7" placeholder="https://burhanbeycan.github.io/nfc-wrist-patch/?d=..."></textarea></label>
+    <button id="write" type="button">Write NFC tag</button>
+    <p id="status" role="status"></p>
+  </main>
+  <script>
+    const status = document.getElementById('status');
+    document.getElementById('write').addEventListener('click', async () => {
+      const url = document.getElementById('url').value.trim();
+      if (!url) return status.textContent = 'Paste a URL first.';
+      if (!('NDEFReader' in window)) return status.textContent = 'Web NFC is not available in this browser. Use Chrome for Android or an NFC writer app.';
+      try {
+        status.textContent = 'Hold the NFC tag near the phone.';
+        const ndef = new NDEFReader();
+        await ndef.write({ records: [{ recordType: 'url', data: url }] }, { overwrite: true });
+        status.textContent = 'Success. NFC URL record written.';
+      } catch (error) {
+        status.textContent = `Write failed: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html>

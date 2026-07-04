@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">NFC wrist patch icon</title>
+  <desc id="desc">A luminous NFC coil around a heart pulse.</desc>
+  <defs>
+    <linearGradient id="g" x1="64" x2="448" y1="64" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5ff2d1"/>
+      <stop offset="1" stop-color="#8ab4ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#07111f"/>
+  <path d="M120 258c42-78 98-78 136 0s94 78 136 0" fill="none" stroke="url(#g)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M128 140c74-70 182-70 256 0M98 102c92-92 224-92 316 0M128 372c74 70 182 70 256 0M98 410c92 92 224 92 316 0" fill="none" stroke="url(#g)" stroke-width="22" stroke-linecap="round" opacity=".72"/>
+</svg>

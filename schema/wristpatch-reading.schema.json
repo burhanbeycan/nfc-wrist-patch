@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/wristpatch-reading.schema.json",
+  "title": "NFC Wrist Patch Health Reading",
+  "type": "object",
+  "required": ["schema", "patchId", "measuredAt", "device", "vitals", "patch", "signal"],
+  "properties": {
+    "schema": { "const": "wristpatch.health.v1" },
+    "patchId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "subjectAlias": { "type": "string", "maxLength": 120 },
+    "measuredAt": { "type": "string", "format": "date-time" },
+    "device": {
+      "type": "object",
+      "required": ["firmware", "sensorStack"],
+      "properties": {
+        "firmware": { "type": "string" },
+        "sensorStack": { "type": "array", "items": { "type": "string" } },
+        "nfcUid": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "vitals": {
+      "type": "object",
+      "required": ["heartRateBpm", "heartRateConfidence"],
+      "properties": {
+        "heartRateBpm": { "type": "number", "minimum": 0, "maximum": 260 },
+        "heartRateConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "spo2Percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "skinTempC": { "type": "number", "minimum": 0, "maximum": 60 },
+        "hrvRmssdMs": { "type": "number", "minimum": 0, "maximum": 250 },
+        "respirationRateBrpm": { "type": "number", "minimum": 0, "maximum": 80 }
+      },
+      "additionalProperties": true
+    },
+    "patch": {
+      "type": "object",
+      "properties": {
+        "hydrationIndex": { "type": "number", "minimum": 0, "maximum": 1 },
+        "electrodeImpedanceKohm": { "type": "number", "minimum": 0, "maximum": 500 },
+        "adhesionScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "interfaceMaterial": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "signal": {
+      "type": "object",
+      "properties": {
+        "quality": { "type": "number", "minimum": 0, "maximum": 100 },
+        "motionArtifact": { "type": "number", "minimum": 0, "maximum": 1 },
+        "batteryPercent": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": true
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["t", "heartRateBpm"],
+        "properties": {
+          "t": { "type": "number" },
+          "heartRateBpm": { "type": "number", "minimum": 0, "maximum": 260 }
+        }
+      }
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "level": { "enum": ["ok", "info", "warn", "danger"] },
+          "title": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "signature": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}
