@@ -1,81 +1,156 @@
-# NTAG213 Fabric Wrist Patch Heartbeat Dashboard
+# NTAG213 Fabric Wrist Patch Heartbeat Dashboard + Native Android App
 
-Professional tap-to-open dashboard for a fabric-integrated NFC wrist patch.
+Professional tap-to-open system for a fabric-integrated NFC wrist patch.
 
-The target workflow is:
+The repository now contains two demonstration layers:
+
+1. **Web dashboard**: NTAG213 opens a GitHub Pages heartbeat screen.
+2. **Native Android app**: Samsung Galaxy S21 opens a sideloaded app directly from the NTAG213 label and shows the heartbeat GUI.
+
+## Target workflow
 
 1. Integrate an **NTAG213 NFC inlay** on the top layer of a fabric wrist patch.
-2. Write a very short **NDEF HTTPS/URI record** to the tag.
-3. Bring a Samsung Galaxy S21 close to the NTAG213.
-4. Android opens the URL in the browser.
-5. The dashboard displays heart rate, SpO₂, HRV, skin temperature, signal quality, battery, patch identity, alerts, and a polished heartbeat GUI.
+2. Install the native Android APK on the Samsung Galaxy S21.
+3. Write the NTAG213 with a short NDEF URI plus Android Application Record.
+4. Bring the phone close to the NTAG213 label.
+5. Android opens the app and displays heart rate, SpO₂, HRV, skin temperature, signal quality, battery, patch identity, alerts, and waveform.
 
-> Important: NTAG213 is a passive NFC tag. It can open a URL and store a small static payload, but it cannot measure heartbeat by itself. Real heartbeat requires PPG/ECG sensing electronics, power, and firmware/backend/BLE/dynamic-NFC support. This repository gives the phone screen and NFC-open workflow.
+> Important: the piezoelectric material and silver-flake electrode can be the pulse-sensing layer, but **NTAG213 cannot digitize the piezo signal by itself**. True heartbeat needs a front-end amplifier, ADC, MCU, and BLE or dynamic-NFC bridge. NTAG213 is the tap-to-open trigger and small ID/summary memory.
 
-## Live URL after GitHub Pages deployment
+## Native Android app
 
-Use this as the NFC URL base:
+Open:
+
+```text
+android/
+```
+
+Package name:
+
+```text
+com.burhanbeycan.nfcwristpatch
+```
+
+Main app launch tag URI:
+
+```text
+wristpatch://read?p=fab01&b=72&o=98.0&t=32.6&v=48&q=94&src=ntag213
+```
+
+BLE live-sensor launch URI:
+
+```text
+wristpatch://read?p=fab01&ble=PiezoPatch
+```
+
+After installing the app, open it manually once and press:
+
+```text
+Write NTAG213 launch tag
+```
+
+The app writes the NTAG213 with a compact URI and an Android Application Record so tapping the label opens the native app.
+
+Detailed setup:
+
+```text
+android/SAMSUNG_S21_INSTALL_AND_TAG.md
+```
+
+Firmware/BLE payload contract:
+
+```text
+firmware/PULSE_SENSOR_PROTOCOL.md
+```
+
+## True heartbeat architecture
+
+For physical pulse measurement from piezo material + silver-flake electrode:
+
+```text
+piezo/silver-flake material
+→ charge amplifier or high-impedance instrumentation front end
+→ band-pass filter and ADC
+→ MCU peak detection or sample streaming
+→ BLE JSON notification or dynamic NFC memory
+→ Android app heartbeat GUI
+```
+
+Recommended urgent demo architecture:
+
+```text
+NTAG213 opens app
+BLE MCU named PiezoPatch sends real BPM/samples
+Android app displays true measured pulse
+```
+
+The Android app listens for BLE service:
+
+```text
+6f8a0001-79a6-4a5c-8f53-0c0a7a201001
+```
+
+notify characteristic:
+
+```text
+6f8a0002-79a6-4a5c-8f53-0c0a7a201001
+```
+
+Example JSON notification:
+
+```json
+{"patchId":"fab01","bpm":76,"quality":93,"battery":84,"contact":"good"}
+```
+
+Or sample burst:
+
+```json
+{"patchId":"fab01","fs":50,"samples":[0,4,9,20,44,80,42,12,3,0,0,5,12,26,60,95,50,15,4,0]}
+```
+
+## Web dashboard URL
+
+Use this when you want browser-only demonstration:
 
 ```text
 https://burhanbeycan.github.io/nfc-wrist-patch/
 ```
 
-Smallest recommended NTAG213 URL:
+Smallest web NTAG213 URL:
 
 ```text
 https://burhanbeycan.github.io/nfc-wrist-patch/?id=fab01
 ```
 
-Compact snapshot URL that stores BPM directly on the tag:
+Compact web snapshot URL:
 
 ```text
 https://burhanbeycan.github.io/nfc-wrist-patch/?p=fab01&b=72&o=98&t=32.6&v=48&q=94
 ```
 
-## URL modes
-
-### 1. Patch ID mode — best for NTAG213
+## Project files
 
 ```text
-?id=fab01
+.
+├── android/                            # Native Samsung Galaxy S21 app
+│   ├── README.md
+│   ├── SAMSUNG_S21_INSTALL_AND_TAG.md
+│   ├── settings.gradle
+│   ├── build.gradle
+│   └── app/
+├── firmware/PULSE_SENSOR_PROTOCOL.md   # BLE/dynamic-NFC protocol for real piezo pulse
+├── index.html                          # Web dashboard
+├── assets/app.js
+├── assets/styles.css
+├── data/readings/fab01.json
+├── data/readings/fab02.json
+├── docs/NTAG213_FABRIC_PATCH.md
+├── docs/REAL_HEARTBEAT_ARCHITECTURE.md
+├── schema/fabric-reading.schema.json
+└── tools/build-ntag213-url.mjs
 ```
 
-The tag stays tiny. The dashboard fetches:
-
-```text
-data/readings/fab01.json
-```
-
-Use this when you want NTAG213 reliability and a short URL.
-
-### 2. Compact snapshot mode — stores numbers in the tag
-
-```text
-?p=fab01&b=72&o=98&t=32.6&v=48&q=94
-```
-
-Parameter meaning:
-
-| Parameter | Meaning |
-| --- | --- |
-| `p` | patch ID |
-| `b` | heart rate in bpm |
-| `o` | SpO₂ percent |
-| `t` | skin temperature in °C |
-| `v` | HRV RMSSD in ms |
-| `q` | signal quality percent |
-
-This can fit NTAG213 if your base URL is short. The displayed value changes only when the tag URL is rewritten.
-
-### 3. Encoded JSON mode — not recommended for NTAG213
-
-```text
-?d=<base64url-json>
-```
-
-This is useful for NTAG216/dynamic NFC demos but usually too large for NTAG213.
-
-## Generate an NTAG213-safe URL
+## NTAG213 web URL generation
 
 ```bash
 node tools/build-ntag213-url.mjs \
@@ -84,7 +159,7 @@ node tools/build-ntag213-url.mjs \
   --mode id
 ```
 
-Compact snapshot:
+Compact web snapshot:
 
 ```bash
 node tools/build-ntag213-url.mjs \
@@ -98,60 +173,18 @@ node tools/build-ntag213-url.mjs \
   --quality 94
 ```
 
-## Write the NTAG213
-
-Use one of these:
-
-1. Open the dashboard on Chrome for Android and press **Write current tag** or **Write with Web NFC**.
-2. Open `tools/write-web-nfc.html` from the deployed site.
-3. Use any Android NFC writer app and select **URL / URI record**.
-
-Do not lock the tag read-only until the Samsung Galaxy S21 opens the dashboard correctly.
-
 ## Fabric integration summary
 
 - Place the NTAG213 antenna inlay on the top/outside textile layer.
 - Keep the NFC antenna away from metal snaps, batteries, conductive gels, and very wet hydrogel zones.
 - Add TPU/silicone/PU encapsulation and strain relief so wrist bending does not crack the inlay.
+- Do not sew through the antenna trace.
 - Test read distance after lamination, sweat exposure, washing simulation, and wrist flexion.
-- For real pulse measurements, add PPG/ECG electronics and use NFC only as the tap-to-open identity layer.
-
-## Project files
-
-```text
-.
-├── index.html
-├── assets/app.js
-├── assets/styles.css
-├── assets/icon.svg
-├── data/readings/fab01.json
-├── data/readings/fab02.json
-├── docs/NTAG213_FABRIC_PATCH.md
-├── docs/REAL_HEARTBEAT_ARCHITECTURE.md
-├── schema/fabric-reading.schema.json
-├── tools/build-ntag213-url.mjs
-└── tools/write-web-nfc.html
-```
-
-## Local preview
-
-```bash
-python3 -m http.server 8080
-```
-
-Open:
-
-```text
-http://localhost:8080/?id=fab01
-```
-
-## GitHub Pages
-
-This repository includes `.github/workflows/pages.yml`. In GitHub repository settings, set Pages source to **GitHub Actions**. The workflow publishes the static site on pushes to `main`.
+- For true pulse, connect the piezo/silver-flake layer to active electronics and feed the app through BLE/dynamic NFC.
 
 ## Safety and privacy
 
-This is a research/engineering prototype, not a medical device. Do not put identifiable medical data in public URLs or public JSON files. For real human data, keep only a random session ID on the tag and fetch signed/encrypted readings from an authenticated backend.
+This is a research/engineering prototype, not a medical device. Do not put identifiable medical data in public URLs, public JSON files, or unencrypted BLE packets. Validate pulse values against ECG or a known reference device before presenting accuracy claims.
 
 ## License
 
