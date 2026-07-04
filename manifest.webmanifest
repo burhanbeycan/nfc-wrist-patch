@@ -1,12 +1,12 @@
 {
-  "name": "NFC Wrist Patch Dashboard",
-  "short_name": "WristPatch NFC",
-  "description": "GitHub Pages dashboard that opens from an NFC URL and displays wrist patch health snapshots.",
-  "start_url": "./",
+  "name": "NTAG213 Fabric Wrist Patch",
+  "short_name": "Patch NFC",
+  "description": "Tap-to-open heartbeat dashboard for an NTAG213 fabric wrist patch.",
+  "start_url": "./?id=fab01",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#07111f",
-  "theme_color": "#07111f",
+  "background_color": "#08111f",
+  "theme_color": "#08111f",
   "icons": [
     {
       "src": "assets/icon.svg",
