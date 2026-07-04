@@ -1,155 +1,157 @@
-# NFC Wrist Patch Dashboard
+# NTAG213 Fabric Wrist Patch Heartbeat Dashboard
 
-A GitHub Pages-ready dashboard for an NFC-readable wrist patch. The intended user flow is:
+Professional tap-to-open dashboard for a fabric-integrated NFC wrist patch.
 
-1. The patch stores an NFC Forum NDEF **URL record**.
-2. A Samsung Galaxy S21 reads the tag.
-3. Android opens the URL in the browser.
-4. This static dashboard decodes the reading and displays heart rate, SpO₂, skin temperature, HRV, hydration/contact metrics, signal quality, battery, and alerts.
+The target workflow is:
 
-> Research safety note: this repository is for an engineering prototype. It is not a medical device, not a diagnosis tool, and not a replacement for clinically validated instrumentation.
+1. Integrate an **NTAG213 NFC inlay** on the top layer of a fabric wrist patch.
+2. Write a very short **NDEF HTTPS/URI record** to the tag.
+3. Bring a Samsung Galaxy S21 close to the NTAG213.
+4. Android opens the URL in the browser.
+5. The dashboard displays heart rate, SpO₂, HRV, skin temperature, signal quality, battery, patch identity, alerts, and a polished heartbeat GUI.
 
-## Why a URL record?
+> Important: NTAG213 is a passive NFC tag. It can open a URL and store a small static payload, but it cannot measure heartbeat by itself. Real heartbeat requires PPG/ECG sensing electronics, power, and firmware/backend/BLE/dynamic-NFC support. This repository gives the phone screen and NFC-open workflow.
 
-For the simplest no-install experience, write a URL to the NFC tag:
+## Live URL after GitHub Pages deployment
 
-```text
-https://burhanbeycan.github.io/nfc-wrist-patch/?d=<base64url-json-reading>
-```
-
-Android recognizes NDEF URL records and routes them to a browser. A native Android app is only needed if you want private app-only dispatch, local encrypted storage, Bluetooth streaming, or Health Connect integration.
-
-## Repository structure
-
-```text
-nfc-wrist-patch/
-├── index.html                         # Dashboard shell
-├── assets/
-│   ├── app.js                         # NFC URL decode, UI render, Web NFC writer
-│   ├── styles.css                     # Responsive expert GUI
-│   └── icon.svg                       # PWA icon
-├── data/
-│   ├── demo-reading.json              # Example reading
-│   └── patches/WP-HYDROGEL-001.json   # Short ?patch=WP-HYDROGEL-001 demo route
-├── docs/
-│   ├── NFC_TAG_SETUP.md               # Galaxy S21 + NFC tag instructions
-│   └── PATCH_ARCHITECTURE.md          # Hardware/materials architecture
-├── schema/wristpatch-reading.schema.json
-├── tools/
-│   ├── build-nfc-url.mjs              # CLI URL generator
-│   └── write-tag-web-nfc.html         # Standalone Web NFC writer page
-├── manifest.webmanifest
-└── service-worker.js
-```
-
-## Deploy on GitHub Pages
-
-For a project repository, copy this folder to the repo root and enable GitHub Pages for the repository. The app is static HTML/CSS/JS, so it can be served directly. If this folder is inside `burhanbeycan.github.io`, the public URL becomes:
+Use this as the NFC URL base:
 
 ```text
 https://burhanbeycan.github.io/nfc-wrist-patch/
 ```
 
-The included GitHub Actions workflow (`.github/workflows/pages.yml`) is useful when Pages is configured for GitHub Actions deployment.
-
-## Generate an NFC URL
-
-From the repository root:
-
-```bash
-node nfc-wrist-patch/tools/build-nfc-url.mjs \
-  nfc-wrist-patch/data/demo-reading.json \
-  --base https://burhanbeycan.github.io/nfc-wrist-patch/
-```
-
-For small-memory tags, use the shorter registry mode:
-
-```bash
-node nfc-wrist-patch/tools/build-nfc-url.mjs \
-  nfc-wrist-patch/data/demo-reading.json \
-  --base https://burhanbeycan.github.io/nfc-wrist-patch/ \
-  --patch-only
-```
-
-This produces:
+Smallest recommended NTAG213 URL:
 
 ```text
-https://burhanbeycan.github.io/nfc-wrist-patch/?patch=WP-HYDROGEL-001
+https://burhanbeycan.github.io/nfc-wrist-patch/?id=fab01
 ```
 
-In `?patch=` mode, the dashboard loads `data/patches/<PATCH_ID>.json`. This keeps the NFC tag small, but the data is public because GitHub Pages is public.
+Compact snapshot URL that stores BPM directly on the tag:
 
-## Write the NFC tag
-
-Use one of these methods:
-
-- Open the dashboard on Chrome for Android and use **Write tag with Web NFC**.
-- Open `tools/write-tag-web-nfc.html` from the deployed site, paste the generated URL, and tap a writable NFC tag.
-- Use an Android NFC writer app and choose **URL / URI record**.
-
-After writing, test by enabling NFC on the Galaxy S21 and tapping the tag. The screen should open the dashboard URL.
-
-## Payload schema
-
-The app accepts JSON shaped like this:
-
-```json
-{
-  "schema": "wristpatch.health.v1",
-  "patchId": "WP-HYDROGEL-001",
-  "subjectAlias": "Volunteer A",
-  "measuredAt": "2026-07-04T11:42:00+03:00",
-  "device": {
-    "firmware": "0.3.0-research",
-    "sensorStack": ["NFC Type 2 tag", "PPG optical module", "skin impedance pair"],
-    "nfcUid": "04-A2-17-8C-93-21-80"
-  },
-  "vitals": {
-    "heartRateBpm": 72,
-    "heartRateConfidence": 0.96,
-    "spo2Percent": 98,
-    "skinTempC": 32.4,
-    "hrvRmssdMs": 48,
-    "respirationRateBrpm": 15
-  },
-  "patch": {
-    "hydrationIndex": 0.71,
-    "electrodeImpedanceKohm": 18.2,
-    "adhesionScore": 0.88
-  },
-  "signal": {
-    "quality": 94,
-    "motionArtifact": 0.08,
-    "batteryPercent": 82
-  }
-}
+```text
+https://burhanbeycan.github.io/nfc-wrist-patch/?p=fab01&b=72&o=98&t=32.6&v=48&q=94
 ```
 
-Full validation schema: `schema/wristpatch-reading.schema.json`.
+## URL modes
 
-## Real hardware limitation
+### 1. Patch ID mode — best for NTAG213
 
-A passive NFC sticker cannot measure live heartbeat by itself. It can only expose data already stored in tag memory. For actual heart-rate acquisition, the patch needs active electronics such as PPG/ECG front-end, an MCU, power, and either dynamic NFC memory, BLE, or a backend connection. For a low-power lab prototype, a dynamic NFC tag can hold the latest reading written by the MCU; for a product-like device, use NFC as the tap-to-open identity channel and stream high-frequency data through BLE.
+```text
+?id=fab01
+```
 
-## Security and privacy recommendations
+The tag stays tiny. The dashboard fetches:
 
-Do not put identifiable personal health information into public URLs. A URL containing `?d=` can be stored in browser history, screenshots, analytics, and server logs. For a real study or product:
+```text
+data/readings/fab01.json
+```
 
-- Store only a random patch/session ID on the NFC tag.
-- Fetch readings from an authenticated backend.
-- Sign each reading with HMAC or an asymmetric signature.
-- Encrypt sensitive fields at rest and in transit.
-- Implement consent, retention, and deletion workflows.
-- Validate the sensor against clinical/reference devices before making health claims.
+Use this when you want NTAG213 reliability and a short URL.
+
+### 2. Compact snapshot mode — stores numbers in the tag
+
+```text
+?p=fab01&b=72&o=98&t=32.6&v=48&q=94
+```
+
+Parameter meaning:
+
+| Parameter | Meaning |
+| --- | --- |
+| `p` | patch ID |
+| `b` | heart rate in bpm |
+| `o` | SpO₂ percent |
+| `t` | skin temperature in °C |
+| `v` | HRV RMSSD in ms |
+| `q` | signal quality percent |
+
+This can fit NTAG213 if your base URL is short. The displayed value changes only when the tag URL is rewritten.
+
+### 3. Encoded JSON mode — not recommended for NTAG213
+
+```text
+?d=<base64url-json>
+```
+
+This is useful for NTAG216/dynamic NFC demos but usually too large for NTAG213.
+
+## Generate an NTAG213-safe URL
+
+```bash
+node tools/build-ntag213-url.mjs \
+  --base https://burhanbeycan.github.io/nfc-wrist-patch/ \
+  --id fab01 \
+  --mode id
+```
+
+Compact snapshot:
+
+```bash
+node tools/build-ntag213-url.mjs \
+  --base https://burhanbeycan.github.io/nfc-wrist-patch/ \
+  --id fab01 \
+  --mode compact \
+  --bpm 72 \
+  --spo2 98 \
+  --temp 32.6 \
+  --hrv 48 \
+  --quality 94
+```
+
+## Write the NTAG213
+
+Use one of these:
+
+1. Open the dashboard on Chrome for Android and press **Write current tag** or **Write with Web NFC**.
+2. Open `tools/write-web-nfc.html` from the deployed site.
+3. Use any Android NFC writer app and select **URL / URI record**.
+
+Do not lock the tag read-only until the Samsung Galaxy S21 opens the dashboard correctly.
+
+## Fabric integration summary
+
+- Place the NTAG213 antenna inlay on the top/outside textile layer.
+- Keep the NFC antenna away from metal snaps, batteries, conductive gels, and very wet hydrogel zones.
+- Add TPU/silicone/PU encapsulation and strain relief so wrist bending does not crack the inlay.
+- Test read distance after lamination, sweat exposure, washing simulation, and wrist flexion.
+- For real pulse measurements, add PPG/ECG electronics and use NFC only as the tap-to-open identity layer.
+
+## Project files
+
+```text
+.
+├── index.html
+├── assets/app.js
+├── assets/styles.css
+├── assets/icon.svg
+├── data/readings/fab01.json
+├── data/readings/fab02.json
+├── docs/NTAG213_FABRIC_PATCH.md
+├── docs/REAL_HEARTBEAT_ARCHITECTURE.md
+├── schema/fabric-reading.schema.json
+├── tools/build-ntag213-url.mjs
+└── tools/write-web-nfc.html
+```
 
 ## Local preview
 
 ```bash
-cd nfc-wrist-patch
 python3 -m http.server 8080
 ```
 
-Open `http://localhost:8080`.
+Open:
+
+```text
+http://localhost:8080/?id=fab01
+```
+
+## GitHub Pages
+
+This repository includes `.github/workflows/pages.yml`. In GitHub repository settings, set Pages source to **GitHub Actions**. The workflow publishes the static site on pushes to `main`.
+
+## Safety and privacy
+
+This is a research/engineering prototype, not a medical device. Do not put identifiable medical data in public URLs or public JSON files. For real human data, keep only a random session ID on the tag and fetch signed/encrypted readings from an authenticated backend.
 
 ## License
 
