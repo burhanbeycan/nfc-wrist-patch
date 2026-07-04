@@ -14,7 +14,6 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.net.Uri;
-import android.os.Build;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -30,6 +29,7 @@ public final class BlePulseClient {
     public static final UUID CHAR_UUID = UUID.fromString("6f8a0002-79a6-4a5c-8f53-0c0a7a201001");
     private static final UUID CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
+    private Context appContext;
     private BluetoothLeScanner scanner;
     private BluetoothGatt gatt;
     private Listener listener;
@@ -42,6 +42,7 @@ public final class BlePulseClient {
     }
 
     public void start(Context context, String target, Listener listener) {
+        this.appContext = context.getApplicationContext();
         this.listener = listener;
         this.targetName = target == null || target.isEmpty() ? "PiezoPatch" : target;
         BluetoothManager manager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
@@ -83,7 +84,7 @@ public final class BlePulseClient {
                 try {
                     if (scanner != null) scanner.stopScan(this);
                     emitStatus("Connecting to " + name);
-                    gatt = device.connectGatt(null, false, gattCallback);
+                    gatt = device.connectGatt(appContext, false, gattCallback);
                 } catch (SecurityException error) {
                     emitError("BLE connect permission missing: " + error.getMessage());
                 }
